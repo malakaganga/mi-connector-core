@@ -20,18 +20,22 @@ package org.wso2.integration.connector.core.util;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.wso2.integration.connector.core.connection.PoolCloseReason;
 import org.wso2.integration.connector.core.pool.ConnectionPool;
+import org.wso2.integration.connector.core.pool.ConnectionFactory;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.TreeMap;
 import java.util.WeakHashMap;
 import java.util.stream.Collectors;
 
 /** Pool identities and observations for the marked build. */
 public final class PoolTestPoints {
     private static final Map<ConnectionPool, String> ids = new WeakHashMap<>();
+    private static final Map<ConnectionPool, String> keys = new WeakHashMap<>();
     private static final ReferenceQueue<ConnectionPool> collected = new ReferenceQueue<>();
     private static long sequence;
 
@@ -41,6 +45,7 @@ public final class PoolTestPoints {
     public static synchronized void constructed(String key, ConnectionPool pool, Map<String, Object> pools) {
         String id = Long.toString(++sequence);
         ids.put(pool, id);
+        keys.put(pool, key);
         PoolReference ref = new PoolReference(pool);
         ref.handle = TestPoints.snapshot("pool.inventory", id, () -> {
             ConnectionPool live = ref.get();
@@ -63,6 +68,21 @@ public final class PoolTestPoints {
 
     private static synchronized String id(ConnectionPool pool) {
         return ids.get(pool);
+    }
+
+    public static Map<String, Integer> activeCounts(String key, ConnectionFactory factory) {
+        Map<ConnectionPool, String> matched = new LinkedHashMap<>();
+        synchronized (PoolTestPoints.class) {
+            for (Map.Entry<ConnectionPool, String> entry : ids.entrySet()) {
+                ConnectionPool pool = entry.getKey();
+                if (pool != null && key.equals(keys.get(pool)) && pool.getConnectionFactory() == factory) {
+                    matched.put(pool, entry.getValue());
+                }
+            }
+        }
+        Map<String, Integer> counts = new TreeMap<>();
+        matched.forEach((pool, id) -> counts.put(id, pool.getNumActive()));
+        return counts;
     }
 
     private static boolean hasEvictor(ConnectionPool pool) {

@@ -79,6 +79,8 @@ public class PoolPublicationTest extends PoolFixture {
         }
     };
     private final ExecutorService workers = Executors.newFixedThreadPool(3);
+    private ConnectionPool originalObservedPool;
+    private ConnectionPool agedObservedPool;
     private Path copy;
     private long start;
 
@@ -99,6 +101,47 @@ public class PoolPublicationTest extends PoolFixture {
         assertTrue(workers.awaitTermination(5, TimeUnit.SECONDS));
         handler.shutdownConnections(connector);
         System.clearProperty("vfs.testpoints.dir");
+    }
+
+    @Test
+    public void activeCountsFollowEachPhysicalPoolAndItsFactory() throws Exception {
+        begin();
+        ConnectionLease old = borrow();
+        originalObservedPool = current();
+        Map<String, Integer> initial = PoolTestPoints.activeCounts(key, first);
+        assertEquals(1, initial.size());
+        String oldId = initial.keySet().iterator().next();
+        assertEquals(Integer.valueOf(1), initial.get(oldId));
+        expire();
+        ConnectionLease aged = borrow();
+        agedObservedPool = current();
+        ConnectionLease other = borrow();
+        Map<String, Integer> rotated = PoolTestPoints.activeCounts(key, first);
+        assertEquals(2, rotated.size());
+        assertEquals(Integer.valueOf(1), rotated.remove(oldId));
+        String agedId = rotated.keySet().iterator().next();
+        assertEquals(Integer.valueOf(2), rotated.get(agedId));
+        other.returnToPool();
+        assertEquals(Integer.valueOf(1), PoolTestPoints.activeCounts(key, first).get(agedId));
+        handler.shutdownConnections(connector);
+        register(second, config);
+        ConnectionLease replacement = borrow();
+        Map<String, Integer> fresh = PoolTestPoints.activeCounts(key, second);
+        assertEquals(1, fresh.size());
+        assertFalse(fresh.containsKey(oldId));
+        assertFalse(fresh.containsKey(agedId));
+        assertEquals(Integer.valueOf(1), fresh.values().iterator().next());
+        assertTrue(PoolTestPoints.activeCounts(key + "other", first).isEmpty());
+        assertEquals(2, PoolTestPoints.activeCounts(key, first).size());
+        old.returnToPool();
+        aged.returnToPool();
+        replacement.returnToPool();
+        assertEquals(Integer.valueOf(0), PoolTestPoints.activeCounts(key, first).get(oldId));
+        assertEquals(Integer.valueOf(0), PoolTestPoints.activeCounts(key, first).get(agedId));
+        assertEquals(Integer.valueOf(0), PoolTestPoints.activeCounts(key, second).values().iterator().next());
+        assertNotSame(originalObservedPool, agedObservedPool);
+        assertEquals(0, originalObservedPool.getNumActive());
+        assertEquals(0, agedObservedPool.getNumActive());
     }
 
     private void begin() throws Exception {

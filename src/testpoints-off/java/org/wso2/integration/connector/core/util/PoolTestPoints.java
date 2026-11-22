@@ -19,7 +19,9 @@ package org.wso2.integration.connector.core.util;
 
 import org.wso2.integration.connector.core.connection.PoolCloseReason;
 import org.wso2.integration.connector.core.pool.ConnectionPool;
+import org.wso2.integration.connector.core.pool.ConnectionFactory;
 
+import java.util.Collections;
 import java.util.Map;
 
 /** Release form of the pool test points. */
@@ -28,6 +30,10 @@ public final class PoolTestPoints {
     }
 
     public static void constructed(String key, ConnectionPool pool, Map<String, Object> pools) {
+    }
+
+    public static Map<String, Integer> activeCounts(String key, ConnectionFactory factory) {
+        return Collections.emptyMap();
     }
 
     public static void hold(String point, String key, ConnectionPool pool) {
