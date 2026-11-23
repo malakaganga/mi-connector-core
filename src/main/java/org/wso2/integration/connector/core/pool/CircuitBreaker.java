@@ -56,6 +56,14 @@ public final class CircuitBreaker {
         return state.get().mode;
     }
 
+    public boolean isOpenBeforeDeadline() {
+        return isOpenBeforeDeadline(state.get());
+    }
+
+    private boolean isOpenBeforeDeadline(State current) {
+        return current.mode == Mode.OPEN && clock.getAsLong() - current.openedAt < current.openDuration;
+    }
+
     State snapshot() {
         return state.get();
     }
@@ -69,7 +77,7 @@ public final class CircuitBreaker {
             if (current.trialInFlight) {
                 throw new CircuitOpenException("Circuit breaker trial is in progress.");
             }
-            if (current.mode == Mode.OPEN && clock.getAsLong() - current.openedAt < current.openDuration) {
+            if (isOpenBeforeDeadline(current)) {
                 throw new CircuitOpenException("Circuit breaker is OPEN. Requests are blocked.");
             }
             long generation = current.mode == Mode.OPEN ? current.generation + 1 : current.generation;

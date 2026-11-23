@@ -43,6 +43,28 @@ public class CircuitBreakerTest {
     private final AtomicLong now = new AtomicLong();
     private final CircuitBreaker breaker = new CircuitBreaker(0, 1000, 2, 3000, now::get);
 
+    @Test
+    public void observingOpenTimeDoesNotReserveTheTrial() throws Exception {
+        assertFalse(breaker.isOpenBeforeDeadline());
+        breaker.admit().reportFailure();
+        State opened = breaker.snapshot();
+        now.set(999);
+        assertTrue(breaker.isOpenBeforeDeadline());
+        assertTrue(breaker.isOpenBeforeDeadline());
+        assertSame(opened, breaker.snapshot());
+        now.incrementAndGet();
+        assertFalse(breaker.isOpenBeforeDeadline());
+        assertSame(opened, breaker.snapshot());
+        Admission trial = breaker.admit();
+        assertFalse(breaker.isOpenBeforeDeadline());
+        assertThrows(CircuitOpenException.class, breaker::admit);
+        trial.reportFailure();
+        now.set(2999);
+        assertTrue(breaker.isOpenBeforeDeadline());
+        now.incrementAndGet();
+        assertFalse(breaker.isOpenBeforeDeadline());
+    }
+
     private Admission trialAtDeadline(CircuitBreaker target, long duration) throws CircuitOpenException {
         assertEquals(Mode.OPEN, target.getMode());
         now.addAndGet(duration - 1);

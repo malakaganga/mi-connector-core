@@ -402,9 +402,18 @@ public class ConnectionHandler implements LocalEntryUndeployCallBack {
     }
 
     public CircuitBreaker.Mode getBreakerState(String connector, String connectionName) {
-        Object pool = connectionMap.get(getCode(connector, connectionName));
-        CircuitBreaker breaker = pool instanceof ConnectionPool ? ((ConnectionPool) pool).getBreaker() : null;
+        CircuitBreaker breaker = findBreaker(connector, connectionName);
         return breaker == null ? CircuitBreaker.Mode.CLOSED : breaker.getMode();
+    }
+
+    public boolean isOpenBeforeDeadline(String connector, String connectionName) {
+        CircuitBreaker breaker = findBreaker(connector, connectionName);
+        return breaker != null && breaker.isOpenBeforeDeadline();
+    }
+
+    private CircuitBreaker findBreaker(String connector, String connectionName) {
+        Object pool = connectionMap.get(getCode(connector, connectionName));
+        return pool instanceof ConnectionPool ? ((ConnectionPool) pool).getBreaker() : null;
     }
 
     /**
