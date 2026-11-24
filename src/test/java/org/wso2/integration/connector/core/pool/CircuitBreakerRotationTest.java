@@ -37,8 +37,8 @@ public class CircuitBreakerRotationTest extends PoolFixture {
     public void rotationAndRedeploy() throws Exception {
         Map<String, Map<String, Object>> observations = new LinkedHashMap<>();
         try {
-            exerciseRow(observations, "A9.9", 1000, 300, 400, 1000);
-            exerciseRow(observations, "C8.9", 10000, 2000, 9900, 10100);
+            exerciseRow(observations, "shortOpenTime", 1000, 300, 400, 1000);
+            exerciseRow(observations, "longOpenTime", 10000, 2000, 9900, 10100);
         } finally {
             String path = System.getenv("BREAKER_OBSERVATIONS");
             if (path != null) {
