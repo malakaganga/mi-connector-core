@@ -282,17 +282,46 @@ public class ConnectionPoolTest extends PoolFixture {
 
     @Test
     public void legacyBorrowLeavesTheTrialForALease() throws Exception {
+        config.setMaxActiveConnections(1);
+        config.setMaxWaitTime(30L);
         register(first, config);
-        failOperation();
+        ConnectionLease occupant = borrow();
+        occupant.reportFailure();
         assertThrows(CircuitOpenException.class, () -> handler.getConnection(connector, name));
         clock.addAndGet(1000);
-        Connection raw = handler.getConnection(connector, name);
-        handler.returnConnection(connector, name, raw);
+        assertThrows(PoolBusyException.class, () -> handler.getConnection(connector, name));
+        assertEquals(CircuitBreaker.Mode.HALF_OPEN, mode());
         assertFalse(current().getBreaker().snapshot().trialInFlight);
+        occupant.returnToPool();
         ConnectionLease next = borrow();
         assertTrue(next.isTrial());
         next.reportSuccess();
         next.returnToPool();
+    }
+
+    @Test
+    public void legacyBorrowReportsItsResultToTheBreaker() throws Exception {
+        config.setMaxActiveConnections(1);
+        config.setMaxWaitTime(30L);
+        register(first, config);
+        first.failCreate = true;
+        ConnectException failed = assertThrows(ConnectException.class,
+                () -> handler.getConnection(connector, name));
+        assertEquals("Cannot make the connection.", failed.getCause().getMessage());
+        assertEquals(CircuitBreaker.Mode.OPEN, mode());
+        assertThrows(CircuitOpenException.class, () -> handler.getConnection(connector, name));
+        clock.addAndGet(1000);
+        failed = assertThrows(ConnectException.class, () -> handler.getConnection(connector, name));
+        assertEquals("Cannot make the connection.", failed.getCause().getMessage());
+        assertEquals(CircuitBreaker.Mode.OPEN, mode());
+        first.failCreate = false;
+        clock.addAndGet(1000);
+        Connection raw = handler.getConnection(connector, name);
+        assertEquals(CircuitBreaker.Mode.CLOSED, mode());
+        assertThrows(PoolBusyException.class, () -> handler.getConnection(connector, name));
+        assertEquals(CircuitBreaker.Mode.CLOSED, mode());
+        assertEquals(0, current().getBreaker().snapshot().failures);
+        handler.returnConnection(connector, name, raw);
     }
 
     @Test

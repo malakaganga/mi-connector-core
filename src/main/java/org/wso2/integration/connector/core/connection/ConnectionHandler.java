@@ -329,9 +329,17 @@ public class ConnectionHandler implements LocalEntryUndeployCallBack {
         if (breaker == null) {
             return checkout(key, pool);
         }
+        // This caller reports no operation result, so the borrow result feeds the breaker. A busy pool is no failure.
         CircuitBreaker.Admission admission = breaker.admit();
         try {
-            return checkout(key, pool);
+            Connection connection = checkout(key, pool);
+            admission.reportSuccess();
+            return connection;
+        } catch (ConnectException e) {
+            if (!(e instanceof PoolBusyException)) {
+                admission.reportFailure();
+            }
+            throw e;
         } finally {
             admission.cancelTrial();
         }
