@@ -107,13 +107,30 @@
         </plugins>
     </build>
     <profiles>
-        <!-- The test build. It compiles the test form of TestPoints and runs the tests that need it. -->
+        <!-- The test build. It compiles the test form of TestPoints and runs the tests that need it.
+             Its jar is never deployed and carries the mark Test-Build in its manifest. -->
         <profile>
             <id>testbuild</id>
             <properties>
                 <testpoints.source>src/testpoints-on/java</testpoints.source>
                 <testpoints.excludedGroups />
+                <maven.deploy.skip>true</maven.deploy.skip>
             </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-jar-plugin</artifactId>
+                        <configuration>
+                            <archive>
+                                <manifestEntries>
+                                    <Test-Build>true</Test-Build>
+                                </manifestEntries>
+                            </archive>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
     <distributionManagement>
