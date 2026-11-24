@@ -17,13 +17,19 @@
  */
 package org.wso2.integration.connector.core.pool;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.wso2.integration.connector.core.connection.CircuitOpenException;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 
+import static java.lang.String.format;
+
 public final class CircuitBreaker {
+
+    private static final Log log = LogFactory.getLog(CircuitBreaker.class);
 
     public enum Mode {
         CLOSED, OPEN, HALF_OPEN
@@ -84,6 +90,9 @@ public final class CircuitBreaker {
             State trial = new State(Mode.HALF_OPEN, current.failures, generation, current.openedAt,
                     current.openDuration, true);
             if (state.compareAndSet(current, trial)) {
+                if (current.mode == Mode.OPEN) {
+                    log.info("Switching circuit breaker to HALF_OPEN state after open duration expired.");
+                }
                 return new Admission(generation, true);
             }
         }
@@ -113,6 +122,12 @@ public final class CircuitBreaker {
                 next = new State(Mode.CLOSED, 0, closedGeneration, 0, initialDuration, false);
             }
             if (state.compareAndSet(current, next)) {
+                if (next.mode == Mode.OPEN && current.mode == Mode.HALF_OPEN) {
+                    log.warn("Connection failed in HALF_OPEN state. Switching to OPEN state.");
+                } else if (next.mode == Mode.OPEN) {
+                    log.warn(format("Circuit breaker tripped after %d failures. Switching to OPEN state.",
+                            next.failures));
+                }
                 return next.generation;
             }
         }

@@ -24,6 +24,7 @@ import org.wso2.integration.connector.core.pool.CircuitBreaker.Mode;
 import org.wso2.integration.connector.core.pool.CircuitBreaker.State;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
@@ -31,6 +32,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -74,6 +78,32 @@ public class CircuitBreakerTest {
         assertTrue(trial.isTrial());
         assertEquals(Mode.HALF_OPEN, target.getMode());
         return trial;
+    }
+
+    @Test
+    public void stateTransitionsAreLogged() throws Exception {
+        Logger logger = Logger.getLogger(CircuitBreaker.class.getName());
+        List<String> lines = new ArrayList<>();
+        Handler collector = new Handler() {
+            public void publish(LogRecord record) {
+                lines.add(record.getLevel() + " " + record.getMessage());
+            }
+            public void flush() {
+            }
+            public void close() {
+            }
+        };
+        logger.addHandler(collector);
+        try {
+            breaker.admit().reportFailure();
+            now.set(1000);
+            breaker.admit().reportFailure();
+        } finally {
+            logger.removeHandler(collector);
+        }
+        assertEquals(Arrays.asList("WARNING Circuit breaker tripped after 1 failures. Switching to OPEN state.",
+                "INFO Switching circuit breaker to HALF_OPEN state after open duration expired.",
+                "WARNING Connection failed in HALF_OPEN state. Switching to OPEN state."), lines);
     }
 
     @Test
